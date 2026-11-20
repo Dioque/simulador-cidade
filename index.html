@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10131b">
+<title>Pixelville | Simulador de cidade</title>
+<link rel="stylesheet" href="./style.css">
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true">▦</span><div><h1>Pixelville</h1><p>SIMULADOR DE CIDADE</p></div></div>
+  <div class="time"><span id="day"></span><button id="play" type="button"></button><button id="next" type="button">+ 1 dia</button></div>
+</header>
+<main>
+  <section class="metrics" aria-label="Indicadores da cidade">
+    <div><span>TESOURO</span><strong id="cash" class="green"></strong></div>
+    <div><span>POPULAÇÃO</span><strong id="population"></strong></div>
+    <div><span>EMPREGOS</span><strong id="jobs"></strong></div>
+    <div><span>SALDO DIÁRIO</span><strong id="balance" class="green"></strong></div>
+  </section>
+  <div class="workspace">
+    <section class="map-panel" aria-label="Mapa da cidade">
+      <div class="panel-head"><h2>Mapa da cidade</h2><span class="tag">20 × 20</span></div>
+      <div class="map-frame"><canvas id="map" width="480" height="480" tabindex="0" aria-label="Mapa da cidade. Use as setas para selecionar um terreno e Enter para construir."></canvas></div>
+      <div class="map-foot"><span id="status" role="status">Escolha uma ferramenta e clique no mapa.</span><span id="coords"></span></div>
+    </section>
+    <aside>
+      <section class="tools-panel">
+        <div class="panel-head"><h2>Construção</h2></div>
+        <div id="tools" class="tools"></div>
+      </section>
+      <section class="hint"><h2>Conecte sua cidade</h2><p>Residências e comércios precisam de uma estrada vizinha para gerar moradores e empregos.</p></section>
+      <section class="save"><span id="save-state" role="status"></span><button id="reset" type="button">Nova cidade</button></section>
+    </aside>
+  </div>
+</main>
+</body>
+</html>
