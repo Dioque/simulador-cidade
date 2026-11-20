@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#131c1e">
+<title>Vila do Farol</title>
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/client.js"></script>
+</head>
+<body>
+<header><a class="brand" href="/"><span aria-hidden="true">✦</span> Vila do Farol</a><div class="head-actions"><span id="connection">Conectando</span><button id="settings" hidden>Configurações</button><button id="logout" hidden>Sair</button></div></header>
+<main>
+  <section id="gate">
+    <div class="welcome"><p class="eyebrow">A COSTA DAS ROTAS PERDIDAS</p><h1>Vila do Farol</h1><p>Um farol apagado. Uma estrada tomada por criaturas. A vila precisa de aventureiros.</p></div>
+    <form id="auth" class="panel">
+      <h2 id="form-title">Entrar na vila</h2>
+      <label>Usuário<input required name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" autocomplete="username"></label>
+      <label>Senha<input required name="password" maxlength="128" type="password" autocomplete="current-password"></label>
+      <fieldset id="character" hidden disabled><legend>Seu aventureiro</legend>
+        <label>Nome do personagem<input name="name" required minlength="3" maxlength="20"></label>
+        <label>Aparência<select name="appearance"><option value="0">Capa rubra</option><option value="1">Capa azul</option><option value="2">Capa verde</option><option value="3">Capa dourada</option></select></label>
+      </fieldset>
+      <p id="auth-message" role="status"></p><button type="submit" class="primary">Entrar</button><button type="button" id="switch">Criar conta</button>
+    </form>
+  </section>
+  <section id="game" hidden>
+    <div class="area"><div><p class="eyebrow">COSTA DO FAROL</p><h1 id="area">Praça do Farol</h1></div><span id="population"></span></div>
+    <div class="layout">
+      <div>
+        <div class="stage"><canvas id="map" width="576" height="384" aria-label="Mapa do jogo em pixel art"></canvas><div id="toast" role="status" hidden></div></div>
+        <div class="bar" aria-label="Controles">
+          <button data-action="attack"><kbd>Espaço</kbd> Espada <small></small></button>
+          <button data-action="dash"><kbd>1</kbd> Investida <small></small></button>
+          <button data-action="guard"><kbd>2</kbd> Guarda <small></small></button>
+          <button data-action="interact"><kbd>E</kbd> Interagir</button>
+          <button id="pack"><kbd>I</kbd> Mochila</button>
+        </div>
+        <p class="keys">WASD ou setas para andar · Aponte com o mouse ou use a direção do movimento.</p>
+        <section class="panel chat">
+          <h2>Chat local</h2><ol id="chat" aria-live="polite"></ol>
+          <form id="chat-form"><input id="chat-text" maxlength="170" autocomplete="off" aria-label="Mensagem do chat" placeholder="Fale com quem está nesta área"><button>Enviar</button></form>
+        </section>
+      </div>
+      <aside>
+        <section class="panel"><p class="eyebrow">AVENTUREIRO</p><h2 id="name"></h2><progress id="hp" aria-label="Vida"></progress><p id="health"></p><p id="weapon"></p></section>
+        <section class="panel quest"><p class="eyebrow">EXPEDIÇÃO</p><h2>Ferramentas perdidas</h2><p id="quest"></p><hr><p id="workshop"></p></section>
+        <section class="panel"><h2>Grupo</h2><div id="team"></div><div id="invite" hidden><p></p><button id="accept">Aceitar convite</button></div><button id="leave" hidden>Sair do grupo</button>
+          <form id="invite-form"><select id="nearby" aria-label="Jogador para convidar"></select><button>Convidar</button></form>
+        </section>
+      </aside>
+    </div>
+  </section>
+</main>
+<dialog id="modal"><div class="modal-head"><h2 id="modal-title"></h2><button id="close-modal" type="button" aria-label="Fechar">×</button></div><div id="modal-body"></div></dialog>
+</body>
+</html>
