@@ -1,195 +1,202 @@
-import { SIZE, TYPES, newCity, neighbors, stats, build, advance } from './city.js';
+import { advance, KINDS, LABELS, newCity, position, stats } from './city.js';
+import { createRenderer } from './render.js';
 
 const get = id => document.getElementById(id);
 const canvas = get('map');
-const ctx = canvas.getContext('2d');
-const tile = canvas.width / SIZE;
-const storageKey = 'pixelville-v1';
+const storageKey = 'pixelville-observatorio-v1';
 const number = new Intl.NumberFormat('pt-BR');
 const money = value => '₡ ' + number.format(value);
+const speedButtons = [...get('speeds').querySelectorAll('button')];
+const clockText = time => [Math.floor(time % 1440 / 60), time % 60]
+  .map(n => String(n).padStart(2,'0')).join(':');
+const dayNumber = time => Math.floor(time / 1440) + 1;
+
 let city = load();
-let selected = 'road';
-let cursor = -1;
-let timer;
-const buttons = {};
+let renderer = createRenderer(canvas,city);
+let selected = null;
+let speed = 1;
+let paused = false;
+let lastEvent;
+let roster;
+let lastDetails = '';
+let tick = 0;
+let lastPositions;
+let savedAt = 0;
+let previous = performance.now();
 
 function load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
-    if (saved?.cells?.length === SIZE * SIZE && Array.isArray(saved.cells) &&
-        saved.cells.every(type => type === null || ['road','house','shop','park'].includes(type)) &&
-        Number.isSafeInteger(saved.cash) && Number.isSafeInteger(saved.day) && saved.day >= 1) return saved;
+    const value = JSON.parse(localStorage.getItem(storageKey));
+    if (value?.version === 1 && value.terrain?.length === 22 && value.buildings?.length &&
+        Array.isArray(value.people) && Array.isArray(value.dogs) && Number.isFinite(value.time)) return value;
   } catch {}
   return newCity();
 }
 
 function save() {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(city));
-    get('save-state').textContent = 'Salvo neste navegador';
+    localStorage.setItem(storageKey,JSON.stringify(city));
+    savedAt = city.time;
+    get('save').textContent = 'Salvo neste navegador';
   } catch {
-    get('save-state').textContent = 'Salvamento indisponível';
+    get('save').textContent = 'Salvamento indisponível';
   }
 }
 
-function drawTile(type, index) {
-  const x = index % SIZE * tile;
-  const y = Math.floor(index / SIZE) * tile;
-  const rect = (color, dx, dy, w, h) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(x + dx, y + dy, w, h);
-  };
-  const grain = (index * 73 + 19) % 97;
-  rect(['#50794d','#537d50','#4d764a','#517b4b'][grain % 4],0,0,24,24);
-  rect('#486e45',0,23,24,1);
-  rect('#486e45',23,0,1,24);
-  rect('#618653',3 + grain % 13,4 + grain % 11,3,2);
-  rect('#436b44',4 + grain % 9,18,4,1);
-  if (!type) return;
+function node(tag,text) {
+  const element = document.createElement(tag);
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
 
-  if (type === 'road') {
-    const connected = neighbors(index).map(i => city.cells[i] === 'road');
-    const segments = [[5,0,14,12],[12,5,12,14],[5,12,14,12],[0,5,12,14]];
-    rect('#a4a28a',5,5,14,14);
-    connected.forEach((on, side) => { if (on) rect('#a4a28a',...segments[side]); });
-    rect('#46505b',7,7,10,10);
-    const lanes = [[7,0,10,12],[12,7,12,10],[7,12,10,12],[0,7,12,10]];
-    const stripes = [[11,2,2,4],[18,11,4,2],[11,18,2,4],[2,11,4,2]];
-    connected.forEach((on, side) => { if (on) rect('#46505b',...lanes[side]); });
-    connected.forEach((on, side) => { if (on) rect('#d1be81',...stripes[side]); });
+function updateRoster() {
+  const ids = city.people.map(p => p.id).join(',');
+  if (ids === roster) return;
+  roster = ids;
+  const people = node('optgroup');
+  people.label = 'Moradores';
+  for (const p of city.people.slice().sort((a,b) => a.name.localeCompare(b.name,'pt-BR'))) {
+    people.append(new Option(p.name,'person:' + p.id));
   }
+  const pets = node('optgroup');
+  pets.label = 'Cães';
+  for (const dog of city.dogs) pets.append(new Option(dog.name,'dog:' + dog.id));
+  get('find').replaceChildren(new Option('Escolher morador ou cão',''),people,pets);
+}
 
-  if (type === 'house') {
-    rect('#365939',4,18,18,4);
-    rect('#d9bf92',5,10,14,10);
-    rect('#a88a69',17,10,2,10);
-    const roof = ['#bc634b','#5c89a6','#c58b4d'][grain % 3];
-    rect(roof,8,4,8,3); rect(roof,6,7,12,3); rect(roof,3,10,18,3);
-    rect('#5b4d45',3,12,18,1);
-    rect('#49646d',7,15,3,3); rect('#785645',13,15,3,5);
-    rect('#a69b78',13,20,3,3);
-  }
-
-  if (type === 'shop') {
-    rect('#385642',3,18,19,4);
-    rect('#dbc6a5',4,8,16,12);
-    rect('#4c5361',3,4,18,5);
-    rect('#7b8b96',5,4,13,2);
-    rect('#f0cf88',3,9,18,4);
-    for (let offset = 4; offset < 21; offset += 4) rect('#b65b53',offset,9,2,4);
-    rect('#4f7583',6,14,5,4); rect('#4f7583',14,14,4,6);
-    rect('#bac3a8',4,20,16,2);
-  }
-
-  if (type === 'park') {
-    rect('#90a270',2,2,20,20);
-    rect('#cab48a',10,2,4,20);
-    for (const [tx, ty] of [[3,3],[14,9],[3,13]]) {
-      rect('#5b4d38',tx + 3,ty + 6,2,4);
-      rect('#326342',tx,ty + 2,8,5);
-      rect('#478454',tx + 1,ty,6,5);
-      rect('#6ca561',tx + 2,ty + 1,3,2);
+function updateDetails() {
+  let title, subtitle, rows = [];
+  if (selected?.type === 'person') {
+    const p = city.people.find(person => person.id === selected.id);
+    if (p) {
+      title = p.name;
+      subtitle = p.path.length ? 'A caminho · ' + LABELS[p.activity] : LABELS[p.activity];
+      rows = [['Idade',p.age + ' anos'],['Saúde',Math.ceil(p.health) + '%'],
+        ['Fome',Math.round(p.hunger) + '%'],['Dinheiro',money(p.money)],
+        ['Trabalho',city.buildings[p.job]?.name ?? '—']];
+    } else {
+      title = 'Morador falecido';
+      subtitle = 'O diário registra o falecimento.';
     }
+  } else if (selected?.type === 'dog') {
+    const dog = city.dogs.find(d => d.id === selected.id);
+    title = dog.name;
+    subtitle = dog.path.length ? 'Cão · Passeando' : 'Cão · Descansando';
+    rows = [['Tutor',city.people.find(p => p.id === dog.owner)?.name ?? 'Sem tutor']];
+  } else if (selected?.type === 'building') {
+    const b = city.buildings[selected.id];
+    title = b.name;
+    subtitle = KINDS[b.kind];
+    if (b.kind === 'home') rows = [['Moradores',city.people.filter(p => p.home === b.id).length]];
+    else rows = [['Trabalhadores',b.workers]];
+    if (['market','bakery','cafe'].includes(b.kind)) rows.push(['Estoque',b.stock],['Itens vendidos',b.sales],['Caixa',money(b.reserve)]);
   }
-}
-
-function draw() {
-  city.cells.forEach(drawTile);
-  if (cursor >= 0) {
-    ctx.strokeStyle = '#e9f9b6';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(cursor % SIZE * tile + 1, Math.floor(cursor / SIZE) * tile + 1, tile - 2, tile - 2);
+  get('find').value = selected && selected.type !== 'building' ? selected.type + ':' + selected.id : '';
+  get('clear').hidden = !selected;
+  const signature = JSON.stringify([title,subtitle,rows]);
+  if (signature === lastDetails) return;
+  lastDetails = signature;
+  const el = get('details');
+  el.replaceChildren();
+  if (!title) {
+    el.append(node('p','Selecione um morador para acompanhar sua rotina ou escolha um prédio no mapa.'));
+    return;
   }
-  get('coords').textContent = cursor < 0 ? '' : `${cursor % SIZE + 1}, ${Math.floor(cursor / SIZE) + 1}`;
+  el.append(node('strong',title),node('p',subtitle));
+  const list = node('dl');
+  for (const [key,value] of rows) list.append(node('dt',key),node('dd',String(value)));
+  if (rows.length) el.append(list);
 }
 
-function refresh() {
-  const { population, jobs, balance } = stats(city);
-  get('day').textContent = `DIA ${city.day}`;
-  get('cash').textContent = money(city.cash);
-  get('population').textContent = number.format(population);
-  get('jobs').textContent = number.format(jobs);
-  get('balance').textContent = (balance > 0 ? '+' : '') + money(balance);
-  get('play').textContent = timer ? 'Ⅱ Pausar' : '▶ Iniciar';
-  draw();
-  save();
+function updateFeed() {
+  if (lastEvent === city.events[0]) return;
+  lastEvent = city.events[0];
+  const feed = city.events.map(event => {
+    const item = node('li');
+    item.dataset.type = event.type;
+    item.append(node('strong',event.title),node('p',event.detail),
+      node('time','Dia ' + dayNumber(event.time) + ' · ' + clockText(event.time)));
+    return item;
+  });
+  get('feed').replaceChildren(...feed);
 }
 
-function select(type) {
-  selected = type;
-  for (const [name, button] of Object.entries(buttons)) button.setAttribute('aria-pressed', name === selected);
+function updatePanel() {
+  const s = stats(city);
+  for (const id of ['residents','employed','active']) get(id).textContent = number.format(s[id]);
+  get('treasury').textContent = money(s.treasury);
+  get('day').textContent = 'Dia ' + dayNumber(city.time);
+  get('hour').textContent = clockText(city.time);
+  const hour = city.time % 1440 / 60;
+  get('period').textContent = hour < 6 ? 'Madrugada' : hour < 12 ? 'Manhã' : hour < 18 ? 'Tarde' : 'Noite';
+  get('summary').textContent = `${s.pets} cães · ${city.births} nascimentos · ${city.deaths} mortes · ${city.solved}/${city.crime} furtos atendidos · ${city.sales} itens vendidos`;
+  updateRoster();
+  updateDetails();
+  updateFeed();
 }
 
-for (const [type, info] of Object.entries(TYPES)) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'tool';
-  button.innerHTML = `<span aria-hidden="true">${info.icon}</span><span><b>${info.name}</b><small>${money(info.cost)}</small></span><kbd aria-hidden="true">${info.key}</kbd>`;
-  button.addEventListener('click', () => select(type));
-  buttons[type] = button;
-  get('tools').append(button);
+function controls() {
+  get('pause').classList.toggle('play',paused);
+  get('pause').setAttribute('aria-label',paused ? 'Retomar' : 'Pausar');
+  get('running').classList.toggle('paused',paused);
+  get('running').lastElementChild.textContent = paused ? 'Simulação pausada' : 'Simulação ativa';
+  for (const button of speedButtons) button.setAttribute('aria-pressed',Number(button.dataset.speed) === speed);
 }
 
-function place() {
-  const error = build(city, cursor, selected);
-  get('status').textContent = error ?? (selected === 'erase' ? 'Terreno liberado.' : TYPES[selected].name + ' adicionado ao mapa.');
-  if (!error) refresh();
-}
-
-function point(event) {
-  const bounds = canvas.getBoundingClientRect();
-  const x = Math.floor((event.clientX - bounds.left) * SIZE / bounds.width);
-  const y = Math.floor((event.clientY - bounds.top) * SIZE / bounds.height);
-  cursor = x >= 0 && x < SIZE && y >= 0 && y < SIZE ? y * SIZE + x : -1;
-  draw();
-}
-
-canvas.addEventListener('pointermove', point);
-canvas.addEventListener('pointerleave', () => { cursor = -1; draw(); });
-canvas.addEventListener('click', event => { point(event); place(); });
-canvas.addEventListener('keydown', event => {
-  const movement = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3 };
-  if (!Object.hasOwn(movement, event.key) && event.key !== 'Enter' && event.key !== ' ') return;
-  event.preventDefault();
-  if (cursor < 0) {
-    cursor = 0;
-    draw();
-  } else if (Object.hasOwn(movement, event.key)) {
-    const next = neighbors(cursor)[movement[event.key]];
-    if (next >= 0) cursor = next;
-    draw();
-  } else {
-    place();
-  }
+get('pause').addEventListener('click',() => { paused = !paused; controls(); save(); });
+for (const button of speedButtons) button.addEventListener('click',() => { speed = Number(button.dataset.speed); controls(); });
+get('clear').addEventListener('click',() => { selected = null; updateDetails(); });
+get('find').addEventListener('change',event => {
+  const [type,id] = event.target.value.split(':');
+  selected = type ? {type,id:Number(id)} : null;
+  updateDetails();
 });
-
-document.addEventListener('keydown', event => {
-  const type = Object.keys(TYPES).find(name => TYPES[name].key === event.key);
-  if (type && !event.ctrlKey && !event.metaKey && !event.altKey) select(type);
+canvas.addEventListener('click',event => {
+  const r = canvas.getBoundingClientRect();
+  selected = renderer.pick((event.clientX-r.left)*canvas.width/r.width,(event.clientY-r.top)*canvas.height/r.height);
+  updateDetails();
 });
-
-function nextDay() { advance(city); refresh(); }
-
-get('next').addEventListener('click', nextDay);
-get('play').addEventListener('click', () => {
-  if (timer) {
-    clearInterval(timer);
-    timer = undefined;
-  } else {
-    timer = setInterval(nextDay, 1500);
-  }
-  refresh();
-});
-
-get('reset').addEventListener('click', () => {
-  if (!confirm('Substituir a cidade salva por uma nova?')) return;
-  clearInterval(timer);
-  timer = undefined;
+get('reset').addEventListener('click',() => {
+  if (!confirm('Reiniciar a cidade e substituir o progresso salvo?')) return;
   city = newCity();
-  select('road');
-  get('status').textContent = 'Nova cidade criada.';
-  refresh();
+  renderer = createRenderer(canvas,city);
+  selected = null;
+  tick = 0;
+  lastPositions = undefined;
+  updatePanel();
+  renderer.draw(city,selected);
+  save();
 });
+addEventListener('pagehide',save);
+document.addEventListener('visibilitychange',() => { if (document.hidden) save(); });
 
-select(selected);
-refresh();
+const interval = 165;
+let lastDraw = 0;
+function frame(now) {
+  const elapsed = Math.min(now-previous,250);
+  previous = now;
+  if (!paused) tick += elapsed*speed;
+  if (tick >= interval) {
+    while (tick >= interval) {
+      lastPositions = {
+        people:new Map(city.people.map(p => [p.id,position(p)])),
+        dogs:new Map(city.dogs.map(d => [d.id,position(d)])),
+      };
+      advance(city);
+      tick -= interval;
+    }
+    updatePanel();
+    if (city.time - savedAt >= 30) save();
+  }
+  if (now - lastDraw >= 1000/30) {
+    renderer.draw(city,selected,lastPositions,tick / interval);
+    lastDraw = now;
+  }
+  requestAnimationFrame(frame);
+}
+
+controls();
+updatePanel();
+renderer.draw(city,selected);
+save();
+requestAnimationFrame(frame);
